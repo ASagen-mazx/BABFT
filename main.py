@@ -12,6 +12,34 @@ import sys
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.client.telegram import TelegramAPIServer
+from aiogram import Bot, Dispatcher
+import aiohttp
+import asyncio
+
+# Создаем сессию с таймаутами
+session = AiohttpSession(
+    timeout=aiohttp.ClientTimeout(total=60, connect=30, sock_read=30)
+)
+
+# Бот с этой сессией
+bot = Bot(token=TELEGRAM_TOKEN, session=session)
+dp = Dispatcher(storage=storage)
+
+# В main добавь реконнект
+async def main():
+    print("🎬 STRANGER THINGS BOT ЗАПУЩЕН!")
+    
+    while True:  # Бесконечный цикл с реконнектом
+        try:
+            await dp.start_polling(bot)
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            print("🔄 Переподключаюсь через 5 секунд...")
+            await asyncio.sleep(5)
+            continue
+        break
 
 # ===== КОНФИГ =====
 TELEGRAM_TOKEN = "8745386740:AAGdHJViFrQVcmzI968E0i5hyNvRtHaKDw4"
