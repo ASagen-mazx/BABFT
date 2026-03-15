@@ -64,7 +64,7 @@ async def ask_groq(question):
             return "Произошла техническая ошибка."
 
 
-@dp.message(Command("startik"))
+@dp.message(Command("botst"))
 async def start_bot(msg: types.Message):
     """Приветствие при старте"""
     await msg.reply("""
