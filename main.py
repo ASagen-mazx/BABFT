@@ -4,8 +4,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 # ===== КОНФИГ =====
-TELEGRAM_TOKEN = "8745386740:AAGdHJViFrQVcmzI968E0i5hyNvRtHaKDw4"
-GROQ_API_KEY = "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"
+TELEGRAM_TOKEN = "8771249360:AAEdVYmX6HKFfPTsT6UIZ4bHdZIllo98aEA"
+GROQ_API_KEY = "sk-BDS-tMFz-jR71h8Bf6OThbM5cPjo3FM_"
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
@@ -33,14 +33,13 @@ SYSTEM_PROMPT = """Ты - эксперт по сериалу «Очень стр
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-
 async def ask_groq(question):
     """Отправка вопроса к Groq API"""
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
-
+    
     data = {
         "model": "llama-3.3-70b-versatile",
         "messages": [
@@ -68,31 +67,29 @@ async def ask_groq(question):
 async def start_bot(msg: types.Message):
     """Приветствие при старте"""
     await msg.reply("""
-Эксперт по Stranger Things активирован!
+🧙‍♂️ **Эксперт по Stranger Things активирован!**
 
 Привет! Я знаю всё о сериале «Очень странные дела». Спрашивай меня о персонажах, сюжете, теориях и деталях.
 
-Как пользоваться:
+📝 **Как пользоваться:**
 • Просто напиши /st и свой вопрос
 • Или сначала /st, а потом вопрос
 • Используй /characters чтобы увидеть список персонажей
 • Используй /seasons чтобы узнать о сезонах
-• Чтобы активировать бота в чате напиши /bost
 
 Пример:
 /st Кто такой Векна?
     """)
 
 
-
 @dp.message(Command("st"))
 async def stranger_things_command(msg: types.Message):
     """Команда для вопросов о Stranger Things"""
     user_id = msg.from_user.id
-
+    
     # Получаем текст после команды
     text = msg.text.replace('/st', '', 1).strip()
-
+    
     if text:
         # Если вопрос есть сразу после команды
         await bot.send_chat_action(msg.chat.id, "typing")
@@ -101,13 +98,13 @@ async def stranger_things_command(msg: types.Message):
     else:
         # Если вопроса нет - переводим в режим ожидания
         waiting_for_question[user_id] = True
-
+        
         # Удаляем состояние через 60 секунд
         async def clear_waiting():
             await asyncio.sleep(60)
             if user_id in waiting_for_question:
                 del waiting_for_question[user_id]
-
+        
         asyncio.create_task(clear_waiting())
         await msg.reply("👂 Я слушаю. Задавайте ваш вопрос о Stranger Things.")
 
@@ -132,11 +129,11 @@ async def list_characters(msg: types.Message):
         "demogorgon": "Демогоргон — монстр из Изнанки",
         "mindflayer": "Мозгохват (Mind Flayer) — сущность из Изнанки"
     }
-
+    
     text = "👥 **Основные персонажи Stranger Things:**\n\n"
     for char in characters.values():
         text += f"• {char}\n"
-
+    
     text += "\nИспользуйте /st [имя персонажа] чтобы узнать больше!"
     await msg.reply(text, parse_mode='Markdown')
 
@@ -151,11 +148,11 @@ async def list_seasons(msg: types.Message):
         "4": "Четвертый сезон: Векна, прошлое Оди, жертва Макс",
         "5": "Пятый сезон: финал, битва с Векной (ожидается)"
     }
-
+    
     text = "📺 **Сезоны Stranger Things:**\n\n"
     for season, desc in seasons.items():
         text += f"**{season} сезон:** {desc}\n\n"
-
+    
     await msg.reply(text, parse_mode='Markdown')
 
 
@@ -181,12 +178,12 @@ async def help_cmd(msg: types.Message):
 async def handle_message(msg: types.Message):
     """Обработка обычных сообщений"""
     user_id = msg.from_user.id
-
+    
     # Проверяем, ждем ли вопрос от этого пользователя
     if waiting_for_question.get(user_id):
         # Убираем из режима ожидания
         del waiting_for_question[user_id]
-
+        
         # Отвечаем на вопрос
         await bot.send_chat_action(msg.chat.id, "typing")
         answer = await ask_groq(f"Вопрос о Stranger Things: {msg.text}")
