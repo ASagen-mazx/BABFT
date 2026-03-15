@@ -1,4 +1,3 @@
-
 import asyncio
 import aiohttp
 from aiogram import Bot, Dispatcher, types, F
@@ -9,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import Message
 from aiogram.enums import ParseMode
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiohttp import web, ClientTimeout, ClientConnectorError, ServerDisconnectedError
+from aiohttp import web, ClientTimeout, ClientConnectorError, ServerDisconnectedError, TCPConnector
 import logging
 import sys
 import os
@@ -64,30 +63,35 @@ class ResilientBot:
         self.storage = None
         self.session = None
         self.running = True
+        self.connector = None
         
     async def create_bot(self):
-        """Создание бота с защитой от таймаутов"""
+        """Создание бота с защитой от таймаутов - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
         try:
-            # Создаем сессию с правильными таймаутами и реконнектом
-            connector = aiohttp.TCPConnector(
+            # Создаем отдельный connector для aiohttp
+            self.connector = aiohttp.TCPConnector(
                 force_close=True,
                 enable_cleanup_closed=True,
                 ttl_dns_cache=300,
-                limit=10
+                limit=10,
+                ssl=False  # Отключаем SSL для скорости
             )
             
-            timeout = ClientTimeout(
-                total=60,  # Общий таймаут
-                connect=30,  # Таймаут подключения
-                sock_read=30,  # Таймаут чтения сокета
-                sock_connect=30  # Таймаут соединения сокета
+            # Создаем ClientTimeout
+            timeout = aiohttp.ClientTimeout(
+                total=60,
+                connect=30,
+                sock_read=30,
+                sock_connect=30
             )
             
+            # В новой версии aiogram AiohttpSession принимает только timeout
+            # Connector передается через aiohttp.ClientSession
             self.session = AiohttpSession(
-                timeout=timeout,
-                connector=connector
+                timeout=timeout
             )
             
+            # Сохраняем connector для использования в запросах
             self.storage = MemoryStorage()
             self.bot = Bot(token=TELEGRAM_TOKEN, session=self.session)
             self.dp = Dispatcher(storage=self.storage)
@@ -96,6 +100,7 @@ class ResilientBot:
             return True
         except Exception as e:
             logger.error(f"❌ Ошибка создания бота: {e}")
+            logger.error(traceback.format_exc())
             return False
     
     async def setup_handlers(self):
@@ -245,19 +250,35 @@ class ResilientBot:
             
             await msg.reply(text, parse_mode=ParseMode.MARKDOWN)
 
-        @self.dp.message()
-        async def handle_other(msg: Message, state: FSMContext):
-            user_id = msg.from_user.id
+        @self.dp.message(Command("help"))
+        async def help_cmd(msg: Message, state: FSMContext):
             current_state = await state.get_state()
             
-            if current_state == BotStates.active:
+            if current_state != BotStates.active:
+                await msg.reply(
+                    "🔹 **Доступные команды:**\n\n"
+                    "/botst - включить бота\n"
+                    "/botoff - выключить бота\n\n"
+                    "❗ Остальные команды работают только после `/botst`"
+                )
                 return
             
-            if current_state != BotStates.active:
-                if user_id not in hint_sent:
-                    await msg.reply("🤖 Я бот по Stranger Things. Напиши /botst чтобы включить меня!")
-                    hint_sent[user_id] = True
-                    logger.info(f"💡 Подсказка отправлена {user_id}")
+            await msg.reply(
+                "**📚 Команды бота:**\n\n"
+                "/botst - включить бота (если выключен)\n"
+                "/botoff - выключить бота\n"
+                "/st [вопрос] - задать вопрос о сериале\n"
+                "/characters - список персонажей\n"
+                "/seasons - информация по сезонам\n"
+                "/help - это сообщение\n\n"
+                "**Примеры вопросов:**\n"
+                "• `/st Кто такой Векна?`\n"
+                "• `/st Что такое Изнанка?`\n"
+                "• `/st Расскажи про Оди`",
+                parse_mode=ParseMode.MARKDOWN
+            )
+
+
 
     async def ask_groq_with_retry(self, question, max_retries=3):
         """Отправка вопроса к Groq API с повторными попытками"""
@@ -284,8 +305,11 @@ class ResilientBot:
                     "max_tokens": 500
                 }
 
+                # Создаем сессию с connector
                 timeout = aiohttp.ClientTimeout(total=30)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
+                connector = aiohttp.TCPConnector(ssl=False)
+                
+                async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
                     async with session.post(GROQ_API_URL, headers=headers, json=data) as resp:
                         if resp.status == 200:
                             result = await resp.json()
@@ -331,6 +355,9 @@ class ResilientBot:
         """Запуск бота с автоматическим переподключением"""
         global reconnect_attempts
         
+        # Сразу запускаем health check сервер
+        asyncio.create_task(self.run_web_server())
+        
         while self.running:
             try:
                 # Создаем бота
@@ -342,9 +369,6 @@ class ResilientBot:
                 # Настраиваем обработчики
                 await self.setup_handlers()
                 
-                # Запускаем health check сервер
-                asyncio.create_task(self.run_web_server())
-                
                 logger.info("🎬 STRANGER THINGS BOT ЗАПУЩЕН!")
                 logger.info("✅ Включение: /botst")
                 logger.info("✅ Выключение: /botoff")
@@ -355,20 +379,23 @@ class ResilientBot:
                 await self.dp.start_polling(
                     self.bot,
                     allowed_updates=['message', 'chat_member'],
-                    timeout=30,
-                    relax=0.5
+                    timeout=30
                 )
                 
-            except (ClientConnectorError, ServerDisconnectedError, TimeoutError) as e:
+            except (ClientConnectorError, ServerDisconnectedError, TimeoutError, 
+                   asyncio.TimeoutError, ConnectionError) as e:
                 reconnect_attempts += 1
-                wait_time = min(30, 5 * (reconnect_attempts ** 0.5))  # Плавное увеличение
+                wait_time = min(30, 5 * (reconnect_attempts ** 0.5))
                 
                 logger.error(f"❌ Сетевая ошибка: {e}")
                 logger.info(f"🔄 Попытка переподключения {reconnect_attempts}/{max_reconnect_attempts} через {wait_time:.0f} сек...")
                 
                 # Очищаем старые сессии
                 if self.bot:
-                    await self.bot.session.close()
+                    try:
+                        await self.bot.session.close()
+                    except:
+                        pass
                 
                 await asyncio.sleep(wait_time)
                 
