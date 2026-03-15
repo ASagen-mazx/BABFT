@@ -82,6 +82,25 @@ async def start_bot(msg: types.Message):
 /st Кто такой Векна?
     """)
 
+@dp.message(Command("start"))
+async def start_bot(msg: types.Message):
+    """Приветствие при старте"""
+    await msg.reply("""
+Эксперт по Stranger Things активирован!
+
+Привет! Я знаю всё о сериале «Очень странные дела». Спрашивай меня о персонажах, сюжете, теориях и деталях.
+
+Как пользоваться:
+• Просто напиши /st и свой вопрос
+• Или сначала /st, а потом вопрос
+• Используй /characters чтобы увидеть список персонажей
+• Используй /seasons чтобы узнать о сезонах
+• Чтобы активировать бота в чате напиши /bost
+
+Пример:
+/st Кто такой Векна?
+    """)
+
 
 @dp.message(Command("st"))
 async def stranger_things_command(msg: types.Message):
