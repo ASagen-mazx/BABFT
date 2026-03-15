@@ -4,8 +4,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 
 # ===== КОНФИГ =====
-TELEGRAM_TOKEN = "8771249360:AAEdVYmX6HKFfPTsT6UIZ4bHdZIllo98aEA"
-GROQ_API_KEY = "sk-BDS-tMFz-jR71h8Bf6OThbM5cPjo3FM_"
+TELEGRAM_TOKEN = "8745386740:AAGdHJViFrQVcmzI968E0i5hyNvRtHaKDw4"
+GROQ_API_KEY = "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"
 
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
